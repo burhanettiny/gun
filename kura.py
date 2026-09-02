@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 st.set_page_config(
     page_title="Altın Günü Kurası",
-    page_icon="💰",
+    page_icon="🪙",
     layout="wide"
 )
 
@@ -43,15 +43,76 @@ GUNLER = {
     6: "Pazar"
 }
 
+# =========================================================
+# ALTIN GÜNÜ TARİHİ HESAPLAMA
+# =========================================================
+
+def altin_gunu_tarihi(yil, ay, gun):
+    """
+    Seçilen gün o ayda yoksa ayın son günü kullanılır.
+    Tarih hafta sonuna denk gelirse sonraki ilk iş gününe taşınır.
+    """
+
+    son_gun = calendar.monthrange(yil, ay)[1]
+
+    # Örneğin 31 seçilmişse Şubat için 28/29 kullan
+    kullanilacak_gun = min(gun, son_gun)
+
+    tarih = date(yil, ay, kullanilacak_gun)
+
+    # Cumartesi / Pazar ise sonraki Pazartesi
+    while tarih.weekday() >= 5:
+        tarih += timedelta(days=1)
+
+    return tarih
+
+
+# =========================================================
+# AY LİSTESİ OLUŞTURMA
+# =========================================================
+
+def aylari_olustur(baslangic_tarihi, ay_sayisi):
+    """
+    Başlangıç tarihindeki gün numarasını koruyarak
+    ardışık ayları oluşturur.
+    """
+
+    sonuc = []
+
+    baslangic_yil = baslangic_tarihi.year
+    baslangic_ay = baslangic_tarihi.month
+    gun = baslangic_tarihi.day
+
+    for i in range(ay_sayisi):
+
+        toplam_ay = baslangic_ay - 1 + i
+
+        yil = baslangic_yil + toplam_ay // 12
+        ay = toplam_ay % 12 + 1
+
+        tarih = altin_gunu_tarihi(
+            yil,
+            ay,
+            gun
+        )
+
+        sonuc.append({
+            "Sıra": i + 1,
+            "Yıl": yil,
+            "Ay": AYLAR[ay],
+            "Tarih": tarih,
+            "Gün": GUNLER[tarih.weekday()]
+        })
+
+    return sonuc
+
 
 # =========================================================
 # SESSION STATE
 # =========================================================
 
-if "katilimci_df" not in st.session_state:
-    st.session_state.katilimci_df = pd.DataFrame(
-        {"Katılımcı": ["", "", "", "", ""]}
-    )
+if "katilimcilar" not in st.session_state:
+    st.session_state.katilimcilar = []
 
 if "kura_sonucu" not in st.session_state:
     st.session_state.kura_sonucu = None
@@ -61,120 +122,22 @@ if "kura_yapildi" not in st.session_state:
 
 
 # =========================================================
-# TARİH HESAPLAMA
-# =========================================================
-
-def altin_gunu_tarihi(yil, ay, gun):
-    """
-    Altın günü tarihini hesaplar.
-
-    Kurallar:
-    1. Kullanıcının belirlediği gün kullanılır.
-    2. O ayda bu gün yoksa ayın son günü kullanılır.
-    3. Hafta sonuna denk gelirse sonraki ilk hafta içi güne geçilir.
-    """
-
-    ayin_son_gunu = calendar.monthrange(yil, ay)[1]
-
-    # Örneğin 31 seçildiyse:
-    # Şubat -> 28/29
-    # Nisan -> 30
-    gercek_gun = min(gun, ayin_son_gunu)
-
-    tarih = date(yil, ay, gercek_gun)
-
-    # Cumartesi veya Pazar ise sonraki ilk hafta içi
-    while tarih.weekday() >= 5:
-        tarih += timedelta(days=1)
-
-    return tarih
-
-
-# =========================================================
-# AYLIK TAKVİMİ OLUŞTUR
-# =========================================================
-
-def aylari_olustur(baslangic_tarihi, ay_sayisi):
-
-    liste = []
-
-    secilen_gun = baslangic_tarihi.day
-
-    for i in range(ay_sayisi):
-
-        # Başlangıç ayından itibaren ilerle
-        toplam_ay = (
-            baslangic_tarihi.month - 1 + i
-        )
-
-        yil = (
-            baslangic_tarihi.year
-            + toplam_ay // 12
-        )
-
-        ay = (
-            toplam_ay % 12
-        ) + 1
-
-        tarih = altin_gunu_tarihi(
-            yil,
-            ay,
-            secilen_gun
-        )
-
-        liste.append({
-            "Sıra": i + 1,
-            "Ay": AYLAR[ay],
-            "Tarih": tarih.strftime("%d.%m.%Y"),
-            "Gün": GUNLER[tarih.weekday()]
-        })
-
-    return pd.DataFrame(liste)
-
-
-# =========================================================
 # BAŞLIK
 # =========================================================
 
-st.title("💰 Altın Günü Kurası")
+st.title("🪙 Altın Günü Kurası")
 
 st.markdown(
     """
-    Altın günü tarihini belirleyin, katılımcıları girin
-    ve kura ile her aya bir kişi atayın.
-    """
-)
-
-st.divider()
-
-
-# =========================================================
-# TARİH SEÇİMİ
-# =========================================================
-
-st.subheader("📅 Altın Günü Başlangıç Tarihi")
-
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    baslangic_tarihi = st.date_input(
-        "İlk Altın Günü tarihi",
-        value=date.today(),
-        format="DD.MM.YYYY"
-    )
-
-with col2:
-    st.metric(
-        "Seçilen Gün",
-        f"{baslangic_tarihi.day}. gün"
-    )
-
-st.info(
-    f"""
-    **Tarih kuralı:** Her ayın {baslangic_tarihi.day}. günü esas alınır.
+    Aylık Altın Günü organizasyonunuz için katılımcıları rastgele
+    aylara dağıtın.
     
-    • İlgili ayda bu gün yoksa ayın son günü kullanılır.  
-    • Hafta sonuna denk gelirse sonraki ilk hafta içi güne taşınır.
+    **Kurallar:**
+    - Her katılımcı yalnızca bir ay alır.
+    - Ay sayısı otomatik olarak katılımcı sayısına eşittir.
+    - Başlangıç tarihindeki gün numarası korunur.
+    - İlgili ayda o gün yoksa ayın son günü kullanılır.
+    - Tarih hafta sonuna denk gelirse sonraki ilk iş gününe taşınır.
     """
 )
 
@@ -182,7 +145,7 @@ st.divider()
 
 
 # =========================================================
-# SEKME YAPISI
+# TABLAR
 # =========================================================
 
 tab1, tab2, tab3 = st.tabs([
@@ -198,96 +161,194 @@ tab1, tab2, tab3 = st.tabs([
 
 with tab1:
 
-    st.header("👥 Kuraya Katılacak Kişiler")
+    st.header("👥 Katılımcılar")
 
     st.write(
-        "İsimleri aşağıdaki tabloya girin. "
-        "Tablonun altındaki **+** işareti ile yeni kişi ekleyebilirsiniz."
+        "Önce Altın Günü'ne katılacak kişi sayısını belirleyin."
     )
 
-    duzenlenen_df = st.data_editor(
-        st.session_state.katilimci_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Katılımcı": st.column_config.TextColumn(
-                "Katılımcı Adı",
-                help="Kuraya katılacak kişinin adını yazın.",
-                max_chars=100
-            )
-        },
-        key="katilimci_editor"
+    kisi_sayisi = st.number_input(
+        "Kaç kişi katılacak?",
+        min_value=2,
+        max_value=100,
+        value=8,
+        step=1
     )
-
-    # Tabloyu session state'e kaydet
-    st.session_state.katilimci_df = duzenlenen_df
-
-    # -----------------------------------------------------
-    # İSİMLERİ TEMİZLE
-    # -----------------------------------------------------
-
-    isimler = []
-
-    for isim in duzenlenen_df["Katılımcı"].tolist():
-
-        if pd.notna(isim):
-
-            isim = str(isim).strip()
-
-            if isim:
-                isimler.append(isim)
-
-    # -----------------------------------------------------
-    # TEKRAR KONTROLÜ
-    # -----------------------------------------------------
-
-    tekrar_edenler = []
-
-    for isim in set(isimler):
-
-        if isimler.count(isim) > 1:
-            tekrar_edenler.append(isim)
-
-    # -----------------------------------------------------
-    # BİLGİ
-    # -----------------------------------------------------
 
     st.divider()
 
-    col1, col2 = st.columns(2)
+    giris_yontemi = st.radio(
+        "Katılımcıları nasıl girmek istersiniz?",
+        [
+            "📝 Tek tek isim gir",
+            "📋 Toplu olarak yapıştır"
+        ],
+        horizontal=True
+    )
 
-    with col1:
-        st.metric(
-            "Katılımcı Sayısı",
-            len(isimler)
-        )
+    # -----------------------------------------------------
+    # TEK TEK İSİM GİRİŞİ
+    # -----------------------------------------------------
 
-    with col2:
-        st.metric(
-            "Kura Ay Sayısı",
-            len(isimler)
-        )
+    if giris_yontemi == "📝 Tek tek isim gir":
 
-    if tekrar_edenler:
+        st.subheader("Katılımcı isimleri")
 
-        st.error(
-            "Aşağıdaki isimler birden fazla girilmiş: "
-            + ", ".join(tekrar_edenler)
-        )
+        isimler = []
 
-    elif len(isimler) == 0:
+        # İki sütun halinde göster
+        sol, sag = st.columns(2)
 
-        st.warning(
-            "Henüz katılımcı eklenmedi."
-        )
+        for i in range(kisi_sayisi):
+
+            if i % 2 == 0:
+                with sol:
+                    isim = st.text_input(
+                        f"{i + 1}. Katılımcı",
+                        key=f"katilimci_{i}",
+                        placeholder="Ad Soyad"
+                    )
+            else:
+                with sag:
+                    isim = st.text_input(
+                        f"{i + 1}. Katılımcı",
+                        key=f"katilimci_{i}",
+                        placeholder="Ad Soyad"
+                    )
+
+            isimler.append(isim.strip())
+
+        st.divider()
+
+        if st.button(
+            "💾 Katılımcıları Kaydet",
+            type="primary",
+            use_container_width=True
+        ):
+
+            # Boş isimleri kontrol et
+            boslar = [
+                i + 1
+                for i, isim in enumerate(isimler)
+                if not isim
+            ]
+
+            # Aynı isimleri kontrol et
+            temiz_isimler = [
+                isim.lower()
+                for isim in isimler
+                if isim
+            ]
+
+            tekrar_var = len(temiz_isimler) != len(set(temiz_isimler))
+
+            if boslar:
+                st.error(
+                    f"Lütfen {', '.join(map(str, boslar))}. "
+                    "katılımcıların isimlerini girin."
+                )
+
+            elif tekrar_var:
+                st.error(
+                    "Aynı isim birden fazla kez girilmiş. "
+                    "Lütfen isimleri kontrol edin."
+                )
+
+            else:
+                st.session_state.katilimcilar = isimler
+                st.session_state.kura_sonucu = None
+                st.session_state.kura_yapildi = False
+
+                st.success(
+                    f"✅ {len(isimler)} katılımcı kaydedildi."
+                )
+
+    # -----------------------------------------------------
+    # TOPLU GİRİŞ
+    # -----------------------------------------------------
 
     else:
 
-        st.success(
-            f"✅ {len(isimler)} katılımcı hazır. "
-            f"Kura {len(isimler)} ay üzerinden yapılacak."
+        st.subheader("📋 Katılımcıları toplu girin")
+
+        st.info(
+            "Her satıra bir katılımcı gelecek şekilde isimleri yapıştırın."
         )
+
+        toplu_giris = st.text_area(
+            "Katılımcı listesi",
+            height=250,
+            placeholder=(
+                "Ahmet Yılmaz\n"
+                "Ayşe Demir\n"
+                "Mehmet Kaya\n"
+                "Fatma Çelik\n"
+                "..."
+            )
+        )
+
+        st.caption(
+            f"Beklenen katılımcı sayısı: **{kisi_sayisi}**"
+        )
+
+        if st.button(
+            "💾 Listeyi Kaydet",
+            type="primary",
+            use_container_width=True
+        ):
+
+            isimler = [
+                x.strip()
+                for x in toplu_giris.splitlines()
+                if x.strip()
+            ]
+
+            if len(isimler) != kisi_sayisi:
+
+                st.error(
+                    f"{kisi_sayisi} kişi seçtiniz ancak "
+                    f"{len(isimler)} isim girdiniz."
+                )
+
+            else:
+
+                temiz_isimler = [
+                    isim.lower()
+                    for isim in isimler
+                ]
+
+                if len(temiz_isimler) != len(set(temiz_isimler)):
+
+                    st.error(
+                        "Aynı isim birden fazla kez girilmiş. "
+                        "Lütfen listeyi kontrol edin."
+                    )
+
+                else:
+
+                    st.session_state.katilimcilar = isimler
+                    st.session_state.kura_sonucu = None
+                    st.session_state.kura_yapildi = False
+
+                    st.success(
+                        f"✅ {len(isimler)} katılımcı kaydedildi."
+                    )
+
+    # -----------------------------------------------------
+    # KAYITLI KATILIMCILAR
+    # -----------------------------------------------------
+
+    if st.session_state.katilimcilar:
+
+        st.divider()
+
+        st.subheader("✅ Kayıtlı Katılımcılar")
+
+        for i, isim in enumerate(
+            st.session_state.katilimcilar,
+            start=1
+        ):
+            st.write(f"**{i}.** {isim}")
 
 
 # =========================================================
@@ -298,49 +359,56 @@ with tab2:
 
     st.header("📅 Altın Günü Takvimi")
 
-    if len(isimler) == 0:
+    if not st.session_state.katilimcilar:
 
         st.warning(
-            "Önce 'Katılımcılar' sekmesinden kişi ekleyin."
+            "Önce 'Katılımcılar' sekmesinden katılımcıları girin."
         )
 
     else:
 
-        takvim_df = aylari_olustur(
-            baslangic_tarihi,
-            len(isimler)
+        st.subheader("Başlangıç tarihi")
+
+        baslangic_tarihi = st.date_input(
+            "İlk Altın Günü tarihi",
+            value=date.today(),
+            format="DD/MM/YYYY"
         )
 
-        st.write(
-            f"Toplam **{len(isimler)} kişi** olduğu için "
-            f"**{len(isimler)} aylık** Altın Günü takvimi oluşturuldu."
+        st.info(
+            f"Seçilen gün: **{baslangic_tarihi.day}**. "
+            "Bu gün tüm aylarda mümkün olduğunca korunacaktır."
+        )
+
+        ay_sayisi = len(
+            st.session_state.katilimcilar
+        )
+
+        takvim = aylari_olustur(
+            baslangic_tarihi,
+            ay_sayisi
+        )
+
+        takvim_df = pd.DataFrame(takvim)
+
+        # Tarihi Türkçe görüntüle
+        takvim_df["Tarih"] = takvim_df["Tarih"].apply(
+            lambda x: x.strftime("%d/%m/%Y")
         )
 
         st.dataframe(
-            takvim_df,
+            takvim_df[
+                [
+                    "Sıra",
+                    "Yıl",
+                    "Ay",
+                    "Tarih",
+                    "Gün"
+                ]
+            ],
             use_container_width=True,
             hide_index=True
         )
-
-        st.divider()
-
-        st.subheader("🎯 Tarih Kurallarının Uygulanması")
-
-        st.write(
-            f"Başlangıç günü: **ayın {baslangic_tarihi.day}. günü**"
-        )
-
-        st.write(
-            "Hafta sonuna denk gelen tarihler otomatik olarak "
-            "**sonraki ilk hafta içi güne** taşınır."
-        )
-
-        if baslangic_tarihi.day >= 29:
-
-            st.write(
-                f"Seçilen gün **{baslangic_tarihi.day}** olduğu için "
-                "bazı aylarda ayın son günü kullanılabilir."
-            )
 
 
 # =========================================================
@@ -351,34 +419,27 @@ with tab3:
 
     st.header("🎲 Kura Sonucu")
 
-    if len(isimler) == 0:
+    if not st.session_state.katilimcilar:
 
         st.warning(
-            "Kura çekmek için önce katılımcıları girin."
-        )
-
-    elif tekrar_edenler:
-
-        st.error(
-            "Kura çekebilmek için tekrarlanan isimleri düzeltin."
+            "Önce katılımcıları girmeniz gerekiyor."
         )
 
     else:
 
         st.write(
-            f"**{len(isimler)} kişi → {len(isimler)} ay**"
-        )
-
-        st.info(
-            "Kura sonucunda her katılımcı yalnızca "
-            "**bir kez** seçilecektir."
+            f"Toplam **{len(st.session_state.katilimcilar)}** "
+            "katılımcı bulunmaktadır."
         )
 
         st.divider()
 
-        # -------------------------------------------------
-        # KURA BUTONU
-        # -------------------------------------------------
+        baslangic_tarihi = st.date_input(
+            "Kura başlangıç tarihi",
+            value=date.today(),
+            format="DD/MM/YYYY",
+            key="kura_baslangic"
+        )
 
         if st.button(
             "🎲 KURAYI ÇEK",
@@ -386,108 +447,115 @@ with tab3:
             use_container_width=True
         ):
 
-            # Listeyi kopyala
-            kura_listesi = isimler.copy()
+            # Katılımcıları kopyala
+            kura_katilimcilari = (
+                st.session_state.katilimcilar.copy()
+            )
 
-            # Rastgele sırala
+            # Güvenli rastgele karıştırma
             random.SystemRandom().shuffle(
-                kura_listesi
+                kura_katilimcilari
             )
 
-            # Takvimi oluştur
-            sonuc_df = aylari_olustur(
+            # Ayları oluştur
+            takvim = aylari_olustur(
                 baslangic_tarihi,
-                len(kura_listesi)
+                len(kura_katilimcilari)
             )
 
-            # Kura sırasını aylara ata
-            sonuc_df["Ev Sahibi"] = kura_listesi
+            sonuc = []
 
-            # Sonucu kaydet
+            for i, kisi in enumerate(
+                kura_katilimcilari
+            ):
+
+                sonuc.append({
+                    "Sıra": takvim[i]["Sıra"],
+                    "Ay": takvim[i]["Ay"],
+                    "Tarih": takvim[i]["Tarih"],
+                    "Gün": takvim[i]["Gün"],
+                    "Katılımcı": kisi
+                })
+
+            sonuc_df = pd.DataFrame(sonuc)
+
             st.session_state.kura_sonucu = sonuc_df
             st.session_state.kura_yapildi = True
 
-            st.rerun()
-
         # -------------------------------------------------
-        # SONUÇ
+        # KURA SONUCU
         # -------------------------------------------------
 
-        if st.session_state.kura_sonucu is not None:
+        if st.session_state.kura_yapildi:
 
-            sonuc = st.session_state.kura_sonucu
+            st.success("🎉 Kura tamamlandı!")
 
-            st.success(
-                "🎉 Kura tamamlandı!"
+            sonuc_df = st.session_state.kura_sonucu.copy()
+
+            gorunum_df = sonuc_df.copy()
+
+            gorunum_df["Tarih"] = gorunum_df["Tarih"].apply(
+                lambda x: x.strftime("%d/%m/%Y")
             )
 
-            st.subheader("🏆 Altın Günü Sonuçları")
-
-            sonuc_goster = sonuc[
+            gorunum_df = gorunum_df[
                 [
                     "Sıra",
                     "Ay",
                     "Tarih",
                     "Gün",
-                    "Ev Sahibi"
+                    "Katılımcı"
                 ]
             ]
 
             st.dataframe(
-                sonuc_goster,
+                gorunum_df,
                 use_container_width=True,
                 hide_index=True
             )
 
-            # -------------------------------------------------
-            # KURA SIRASI
-            # -------------------------------------------------
-
-            st.subheader("🎲 Rastgele Sıralama")
-
-            for i, kisi in enumerate(
-                sonuc["Ev Sahibi"].tolist(),
-                start=1
-            ):
-
-                if i == 1:
-                    ikon = "🥇"
-                elif i == 2:
-                    ikon = "🥈"
-                elif i == 3:
-                    ikon = "🥉"
-                else:
-                    ikon = f"{i}."
-
-                st.write(
-                    f"{ikon} **{kisi}**"
-                )
-
-            # -------------------------------------------------
-            # CSV İNDİR
-            # -------------------------------------------------
-
             st.divider()
 
-            csv = sonuc_goster.to_csv(
+            # ---------------------------------------------
+            # CSV İNDİRME
+            # ---------------------------------------------
+
+            csv_data = gorunum_df.to_csv(
                 index=False
             ).encode("utf-8-sig")
 
             st.download_button(
-                label="📥 Kura Sonucunu İndir",
-                data=csv,
+                label="📥 Sonucu CSV olarak indir",
+                data=csv_data,
                 file_name="altin_gunu_kura_sonucu.csv",
                 mime="text/csv",
                 use_container_width=True
             )
 
+            # ---------------------------------------------
+            # KISA ÖZET
+            # ---------------------------------------------
 
-# =========================================================
-# ALT BİLGİ
-# =========================================================
+            st.divider()
 
-st.divider()
+            st.subheader("📌 Özet")
 
-st.caption(
-    "💰 Altın Günü Kura Uygulaması"
-)
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric(
+                    "Katılımcı",
+                    len(st.session_state.katilimcilar)
+                )
+
+            with col2:
+                st.metric(
+                    "Altın Günü",
+                    len(st.session_state.kura_sonucu)
+                )
+
+            with col3:
+                st.metric(
+                    "Her kişi",
+                    "1 ay"
+                )
